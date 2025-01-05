@@ -37,7 +37,6 @@ func (hc *HttpClient) traverseHtmlDoc(node *html.Node) []string {
 				urls = append(urls, attr.Val)
 			}
 		}
-
 	}
 
 	for childNode := node.FirstChild; childNode != nil; childNode = childNode.NextSibling {

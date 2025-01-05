@@ -1,6 +1,7 @@
 package crawler
 
 import (
+	"fmt"
 	"log"
 	"net/url"
 	"sync"
@@ -19,11 +20,23 @@ func NewCrawler(url string, depth int, timeout int) *Crawler {
 	return &Crawler{startUrl: url, depth: depth, httpParser: parser.NewHttpClient(timeout)}
 }
 
+func isValidUrl(u string) (*url.URL, error) {
+	urlOb, err := url.Parse(u)
+	if err != nil {
+		return nil, err
+	}
+	if urlOb.Scheme == "" || urlOb.Host == "" {
+		return nil, fmt.Errorf("empty url scheme or host")
+	}
+	return urlOb, nil
+}
+
 func (c *Crawler) Crawl() {
 	urlsToFetch := []string{c.startUrl}
-	parsedUrl, err := url.Parse(c.startUrl)
+	parsedUrl, err := isValidUrl(c.startUrl)
 	if err != nil {
-		log.Println("Invalid start url: ", c.startUrl)
+		err = fmt.Errorf("invalid start url: %s, error: %v", c.startUrl, err)
+		log.Println(err)
 		return
 	}
 
@@ -35,7 +48,8 @@ func (c *Crawler) Crawl() {
 		wg.Add(len(urlsToFetch))
 		for _, url := range urlsToFetch {
 			go func() {
-				uniqueUrls := c.fetchUniqueUrlsOnPage(url, &wg)
+				defer wg.Done()
+				uniqueUrls := c.fetchUniqueUrlsOnPage(url)
 				c.mu.Lock()
 				nextUrlsToFetch = append(nextUrlsToFetch, uniqueUrls...)
 				c.mu.Unlock()
@@ -46,13 +60,11 @@ func (c *Crawler) Crawl() {
 	}
 }
 
-func (c *Crawler) fetchUniqueUrlsOnPage(urlStr string, wg *sync.WaitGroup) []string {
-	defer wg.Done()
-
+func (c *Crawler) fetchUniqueUrlsOnPage(urlStr string) []string {
 	urls := c.httpParser.FindUrlsOnPage(urlStr)
 	var uniqueUrls []string
 	for _, u := range urls {
-		parsedUrl, err := url.Parse(u)
+		parsedUrl, err := isValidUrl(u)
 		if err != nil {
 			log.Println("Invalid start url: ", c.startUrl)
 			continue
